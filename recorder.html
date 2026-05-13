@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#0a0a0a">
+<title>10秒レコーダー</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --border: #2a2a2a;
+    --accent: #e8ff47;
+    --accent-dim: #b8cc2a;
+    --red: #ff4444;
+    --text: #f0f0f0;
+    --text-dim: #666;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    height: 100vh;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  /* ヘッダー */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+    flex-shrink: 0;
+  }
+
+  .title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .counter-badge {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .counter-badge span {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* プレビュー */
+  .preview-wrap {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+    border: 1px solid var(--border);
+  }
+
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .status-overlay {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+
+  .dot.recording {
+    background: var(--red);
+    animation: pulse 0.8s ease-in-out infinite;
+  }
+
+  .dot.standby {
+    background: var(--accent);
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  /* タイマーリング */
+  .timer-ring-wrap {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+  }
+
+  .timer-ring {
+    width: 52px;
+    height: 52px;
+    transform: rotate(-90deg);
+  }
+
+  .ring-bg {
+    fill: none;
+    stroke: rgba(255,255,255,0.15);
+    stroke-width: 4;
+  }
+
+  .ring-progress {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 138;
+    stroke-dashoffset: 138;
+    transition: stroke-dashoffset 0.1s linear;
+  }
+
+  .ring-progress.recording {
+    stroke: var(--red);
+  }
+
+  .ring-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* カメラなし表示 */
+  .no-camera {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  .no-camera-icon {
+    font-size: 36px;
+    opacity: 0.3;
+  }
+
+  /* コントロール */
+  .controls {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* メインボタン */
+  .btn-main {
+    width: 100%;
+    padding: 16px;
+    border-radius: 12px;
+    border: none;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    -webkit-appearance: none;
+  }
+
+  .btn-main:active { transform: scale(0.97); }
+
+  .btn-start {
+    background: var(--accent);
+    color: #000;
+  }
+
+  .btn-start:disabled {
+    background: var(--border);
+    color: var(--text-dim);
+    cursor: not-allowed;
+  }
+
+  .btn-stop {
+    background: var(--red);
+    color: #fff;
+  }
+
+  /* サブボタン行 */
+  .btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .btn-sub {
+    padding: 11px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    -webkit-appearance: none;
+  }
+
+  .btn-sub:active { transform: scale(0.97); opacity: 0.8; }
+
+  .btn-cam {
+    border-color: var(--border);
+  }
+
+  .btn-list {
+    border-color: var(--border);
+  }
+
+  /* 録画リスト */
+  .recordings-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    max-height: 55vh;
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    z-index: 100;
+    padding: 8px 12px 20px;
+  }
+
+  .recordings-panel.open {
+    transform: translateY(0);
+  }
+
+  .panel-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 8px auto 12px;
+  }
+
+  .panel-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+
+  .rec-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .rec-item:last-child { border-bottom: none; }
+
+  .rec-name {
+    font-size: 12px;
+    color: var(--text);
+    font-family: monospace;
+  }
+
+  .rec-size {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .btn-dl {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .empty-msg {
+    color: var(--text-dim);
+    font-size: 13px;
+    text-align: center;
+    padding: 20px 0;
+  }
+
+  .overlay-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99;
+    display: none;
+  }
+
+  .overlay-bg.open { display: block; }
+
+  /* トースト */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-60px);
+    background: var(--accent);
+    color: #000;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: transform 0.3s ease;
+    z-index: 200;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="title">🎥 10秒レコーダー</div>
+    <div class="counter-badge">保存済み <span id="recCount">0</span> 件</div>
+  </div>
+
+  <div class="preview-wrap">
+    <video id="preview" autoplay muted playsinline></video>
+    <div class="no-camera" id="noCam">
+      <div class="no-camera-icon">📷</div>
+      <div>「録画開始」でカメラが起動します</div>
+    </div>
+
+    <div class="status-overlay">
+      <div class="status-pill">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">待機中</span>
+      </div>
+    </div>
+
+    <div class="timer-ring-wrap">
+      <svg class="timer-ring" viewBox="0 0 48 48">
+        <circle class="ring-bg" cx="24" cy="24" r="22"/>
+        <circle class="ring-progress" id="ringProgress" cx="24" cy="24" r="22"/>
+      </svg>
+      <div class="ring-text" id="ringText">—</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-main btn-start" id="btnRecord" onclick="handleRecord()">
+      ▶ 録画開始
+    </button>
+    <div class="btn-row">
+      <button class="btn-sub btn-cam" onclick="switchCamera()">🔄 カメラ切替</button>
+      <button class="btn-sub btn-list" onclick="togglePanel()">📂 録画一覧</button>
+    </div>
+  </div>
+</div>
+
+<!-- 録画リストパネル -->
+<div class="overlay-bg" id="overlayBg" onclick="togglePanel()"></div>
+<div class="recordings-panel" id="recPanel">
+  <div class="panel-handle"></div>
+  <div class="panel-title">録画ファイル一覧</div>
+  <div id="recList"><div class="empty-msg">録画データがありません</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let stream = null;
+let mediaRecorder = null;
+let chunks = [];
+let isRecording = false;
+let timerInterval = null;
+let elapsed = 0;
+let recordings = [];
+let facingMode = 'environment'; // 背面カメラ優先
+const DURATION = 10;
+const CIRCUMFERENCE = 2 * Math.PI * 22; // ≈138
+
+const preview = document.getElementById('preview');
+const btnRecord = document.getElementById('btnRecord');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const ringProgress = document.getElementById('ringProgress');
+const ringText = document.getElementById('ringText');
+const noCam = document.getElementById('noCam');
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+async function startCamera() {
+  try {
+    if (stream) { stream.getTracks().forEach(t => t.stop()); }
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: true
+    });
+    preview.srcObject = stream;
+    noCam.style.display = 'none';
+    return true;
+  } catch (e) {
+    showToast('カメラの起動に失敗しました');
+    return false;
+  }
+}
+
+async function switchCamera() {
+  facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  if (stream) await startCamera();
+}
+
+function setStatus(state) {
+  statusDot.className = 'dot ' + state;
+  if (state === 'recording') {
+    statusText.textContent = '録画中';
+    btnRecord.className = 'btn-main btn-stop';
+    btnRecord.innerHTML = '⏹ 録画停止';
+  } else if (state === 'standby') {
+    statusText.textContent = 'スタンバイ';
+    btnRecord.className = 'btn-main btn-start';
+    btnRecord.innerHTML = '▶ 録画開始';
+  } else {
+    statusText.textContent = '待機中';
+    btnRecord.className = 'btn-main btn-start';
+    btnRecord.innerHTML = '▶ 録画開始';
+    ringText.textContent = '—';
+    ringProgress.style.strokeDashoffset = CIRCUMFERENCE;
+    ringProgress.className = 'ring-progress';
+  }
+}
+
+function updateRing(sec) {
+  const progress = sec / DURATION;
+  const offset = CIRCUMFERENCE * (1 - progress);
+  ringProgress.style.strokeDashoffset = offset;
+  ringText.textContent = (DURATION - sec) + 's';
+}
+
+async function handleRecord() {
+  if (!isRecording) {
+    // 録画開始
+    if (!stream) {
+      const ok = await startCamera();
+      if (!ok) return;
+    }
+    startRecording();
+  } else {
+    // 手動停止
+    stopRecording(true);
+  }
+}
+
+function startRecording() {
+  if (!stream) return;
+  chunks = [];
+  isRecording = true;
+  elapsed = 0;
+
+  const mimeType = getSupportedMime();
+  mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+  mediaRecorder.onstop = () => saveRecording();
+  mediaRecorder.start();
+
+  setStatus('recording');
+  ringProgress.className = 'ring-progress recording';
+  updateRing(0);
+
+  timerInterval = setInterval(() => {
+    elapsed++;
+    updateRing(elapsed);
+    if (elapsed >= DURATION) {
+      stopRecording(false);
+    }
+  }, 1000);
+}
+
+function stopRecording(manual) {
+  clearInterval(timerInterval);
+  isRecording = false;
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  setStatus('standby');
+  ringProgress.className = 'ring-progress';
+  ringProgress.style.strokeDashoffset = CIRCUMFERENCE;
+  ringText.textContent = manual ? '—' : '✓';
+}
+
+function getSupportedMime() {
+  const types = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+  for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+  return '';
+}
+
+function saveRecording() {
+  const mime = mediaRecorder.mimeType || 'video/webm';
+  const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+  const now = new Date();
+  const ts = now.getFullYear().toString() +
+    String(now.getMonth()+1).padStart(2,'0') +
+    String(now.getDate()).padStart(2,'0') + '_' +
+    String(now.getHours()).padStart(2,'0') +
+    String(now.getMinutes()).padStart(2,'0') +
+    String(now.getSeconds()).padStart(2,'0');
+  const filename = `REC_${ts}.${ext}`;
+
+  const blob = new Blob(chunks, { type: mime });
+  const url = URL.createObjectURL(blob);
+  const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+
+  // 自動ダウンロード
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  recordings.unshift({ filename, url, sizeMB, blob });
+  updateRecCount();
+  updateRecList();
+  showToast(`✓ 保存: ${filename}`);
+  chunks = [];
+}
+
+function updateRecCount() {
+  document.getElementById('recCount').textContent = recordings.length;
+}
+
+function updateRecList() {
+  const list = document.getElementById('recList');
+  if (recordings.length === 0) {
+    list.innerHTML = '<div class="empty-msg">録画データがありません</div>';
+    return;
+  }
+  list.innerHTML = recordings.map((r, i) => `
+    <div class="rec-item">
+      <div>
+        <div class="rec-name">${r.filename}</div>
+        <div class="rec-size">${r.sizeMB} MB</div>
+      </div>
+      <button class="btn-dl" onclick="reDownload(${i})">↓ DL</button>
+    </div>
+  `).join('');
+}
+
+function reDownload(i) {
+  const r = recordings[i];
+  const a = document.createElement('a');
+  a.href = r.url;
+  a.download = r.filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast('再ダウンロード開始');
+}
+
+function togglePanel() {
+  const panel = document.getElementById('recPanel');
+  const bg = document.getElementById('overlayBg');
+  panel.classList.toggle('open');
+  bg.classList.toggle('open');
+}
+
+// 初期状態
+setStatus('idle');
+ringProgress.style.strokeDashoffset = CIRCUMFERENCE;
+</script>
+</body>
+</html>
